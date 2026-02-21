@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/fasthttp/router"
 	"github.com/gorilla/websocket"
@@ -19,11 +20,13 @@ var (
 	upgrader     = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
+	githubToken = ""
 )
 
 func main() {
 	// Load gateway token from config
 	loadGatewayToken()
+	loadGitHubToken()
 
 	r := router.New()
 	
@@ -35,6 +38,7 @@ func main() {
 	r.GET("/api/cron", cronHandler)
 	r.GET("/api/channels", channelsHandler)
 	r.GET("/api/memory", memoryHandler)
+	r.GET("/api/memory/{filename}", memoryFileHandler)
 	
 	// Browser proxy
 	r.GET("/api/browser/status", browserStatusHandler)
@@ -54,8 +58,14 @@ func main() {
 	}
 	r.NotFound = fs.NewRequestHandler()
 
-	log.Println("Rarclaw Control Center starting on :3333")
-	log.Fatal(fasthttp.ListenAndServe(":3333", r.Handler))
+	fmt.Println("Rarclaw Control Center starting on :3333")
+	fmt.Println("Gateway:", gatewayURL)
+	fmt.Println("Token loaded:", gatewayToken != "")
+	fmt.Println("GitHub token loaded:", githubToken != "")
+	
+	if err := fasthttp.ListenAndServe(":3333", r.Handler); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func getEnv(key, fallback string) string {
@@ -66,37 +76,49 @@ func getEnv(key, fallback string) string {
 }
 
 func loadGatewayToken() {
-	// Try to load from ~/.openclaw/openclaw.json
 	home, _ := os.UserHomeDir()
 	configPath := filepath.Join(home, ".openclaw", "openclaw.json")
 	
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		log.Printf("Warning: could not load openclaw.json: %v", err)
+		fmt.Printf("Warning: could not load openclaw.json: %v\n", err)
 		return
 	}
 	
 	var config map[string]interface{}
 	if err := json.Unmarshal(data, &config); err != nil {
-		log.Printf("Warning: could not parse openclaw.json: %v", err)
+		fmt.Printf("Warning: could not parse openclaw.json: %v\n", err)
 		return
 	}
 	
-	// Extract token from gateway.auth.token
 	if gateway, ok := config["gateway"].(map[string]interface{}); ok {
 		if auth, ok := gateway["auth"].(map[string]interface{}); ok {
 			if token, ok := auth["token"].(string); ok {
 				gatewayToken = token
-				log.Println("Loaded gateway token from config")
 			}
 		}
+	}
+}
+
+func loadGitHubToken() {
+	// Try env first
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+		githubToken = strings.TrimSpace(token)
+		return
+	}
+	
+	// Try file
+	home, _ := os.UserHomeDir()
+	data, err := os.ReadFile(filepath.Join(home, ".openclaw", "credentials", "github.token"))
+	if err == nil {
+		githubToken = strings.TrimSpace(string(data))
 	}
 }
 
 func healthHandler(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("application/json")
 	json.NewEncoder(ctx).Encode(map[string]string{
-		"status": "ok",
+		"status":  "ok",
 		"gateway": gatewayURL,
 	})
 }
