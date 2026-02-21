@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Github, Star, GitFork, ExternalLink } from 'lucide-react'
 
 function GitHub() {

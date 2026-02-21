@@ -8,13 +8,27 @@ export default {
     extend: {
       colors: {
         rar: {
-          900: '#1a1612',
-          800: '#2d2420',
-          700: '#3d3229',
-          600: '#4d4035',
-          accent: '#ff6b35',
+          900: '#0a0a0a',
+          800: '#141414',
+          700: '#1a1a1a',
+          600: '#262626',
+          accent: '#f97316',
         }
-      }
+      },
+      animation: {
+        'slide-in': 'slideIn 0.3s ease-out',
+        'fade-in': 'fadeIn 0.2s ease-out',
+      },
+      keyframes: {
+        slideIn: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+      },
     },
   },
   plugins: [],

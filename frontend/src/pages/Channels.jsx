@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { MessageSquare, Check, X } from 'lucide-react'
 
 function Channels() {
