@@ -1,20 +1,20 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { 
   Clock, Plus, Play, Trash2, RefreshCw, AlertCircle, CheckCircle, 
   Pause, Power, History, Terminal, Globe, MessageSquare, Bell,
-  ChevronDown, ChevronUp, Repeat, Zap, X, ArrowLeft, Check
+  ChevronDown, ChevronUp, Repeat, Zap, X, ArrowLeft
 } from 'lucide-react'
 
 const SCHEDULE_PRESETS = [
-  { label: 'Every minute', kind: 'every', everyMs: 60000 },
-  { label: 'Every 5 min', kind: 'every', everyMs: 300000 },
-  { label: 'Every 15 min', kind: 'every', everyMs: 900000 },
-  { label: 'Every 30 min', kind: 'every', everyMs: 1800000 },
-  { label: 'Every hour', kind: 'every', everyMs: 3600000 },
-  { label: 'Daily 9am', kind: 'cron', expr: '0 9 * * *' },
-  { label: 'Daily 6pm', kind: 'cron', expr: '0 18 * * *' },
-  { label: 'Weekly Mon', kind: 'cron', expr: '0 9 * * 1' },
-  { label: 'One time only', kind: 'once' },
+  { id: 'min1', label: 'Every minute', kind: 'every', everyMs: 60000 },
+  { id: 'min5', label: 'Every 5 min', kind: 'every', everyMs: 300000 },
+  { id: 'min15', label: 'Every 15 min', kind: 'every', everyMs: 900000 },
+  { id: 'min30', label: 'Every 30 min', kind: 'every', everyMs: 1800000 },
+  { id: 'hour1', label: 'Every hour', kind: 'every', everyMs: 3600000 },
+  { id: 'day9', label: 'Daily 9am', kind: 'cron', expr: '0 9 * * *' },
+  { id: 'day18', label: 'Daily 6pm', kind: 'cron', expr: '0 18 * * *' },
+  { id: 'week', label: 'Weekly Mon', kind: 'cron', expr: '0 9 * * 1' },
+  { id: 'once', label: 'One time only', kind: 'once' },
 ]
 
 const PAYLOAD_TYPES = [
@@ -31,7 +31,6 @@ function Cron() {
   const [expandedJob, setExpandedJob] = useState(null)
   const [message, setMessage] = useState(null)
   
-  // Step: 'name' | 'schedule' | 'type' | 'command' | 'delivery' | 'review'
   const [step, setStep] = useState('name')
   const [formData, setFormData] = useState({
     name: '',
@@ -39,8 +38,14 @@ function Cron() {
     payload: { kind: 'exec', command: '' },
     delivery: { mode: 'none' }
   })
-
-  const fetchJobs = () => {
+  
+  // Use ref to track if wizard is open (prevents auto-refresh)
+  const wizardOpenRef = useRef(false)
+  
+  const fetchJobs = useCallback(() => {
+    // Don't refresh while wizard is open
+    if (wizardOpenRef.current) return
+    
     setLoading(true)
     fetch('/api/cron')
       .then(r => r.json())
@@ -52,13 +57,18 @@ function Cron() {
         setJobs([])
         setLoading(false)
       })
-  }
+  }, [])
 
   useEffect(() => {
     fetchJobs()
-    const interval = setInterval(fetchJobs, 10000)
+    const interval = setInterval(fetchJobs, 30000) // 30s instead of 10s
     return () => clearInterval(interval)
-  }, [])
+  }, [fetchJobs])
+  
+  // Track wizard state
+  useEffect(() => {
+    wizardOpenRef.current = showAdd
+  }, [showAdd])
 
   const resetForm = () => {
     setStep('name')
@@ -132,7 +142,12 @@ function Cron() {
 
   const formatTime = (t) => t ? new Date(t).toLocaleString() : 'Never'
 
-  // Wizard steps
+  // Find current selection
+  const currentScheduleId = SCHEDULE_PRESETS.find(p => 
+    p.kind === formData.schedule.kind && 
+    (p.everyMs === formData.schedule.everyMs || p.expr === formData.schedule.expr)
+  )?.id
+
   const STEPS = ['name', 'schedule', 'type', 'command', 'delivery', 'review']
   const currentStepIndex = STEPS.indexOf(step)
 
@@ -146,7 +161,6 @@ function Cron() {
     if (prev) setStep(prev)
   }
 
-  // Render wizard content based on step
   const renderStep = () => {
     switch (step) {
       case 'name':
@@ -171,27 +185,31 @@ function Cron() {
             <label className="block text-sm font-medium">How often should it run?</label>
             <div className="grid grid-cols-1 gap-2">
               {SCHEDULE_PRESETS.map(preset => {
-                const selected = formData.schedule.kind === preset.kind && 
-                  (formData.schedule.everyMs === preset.everyMs || formData.schedule.expr === preset.expr)
+                const isSelected = currentScheduleId === preset.id
                 return (
                   <button
-                    key={preset.label}
+                    key={preset.id}
+                    type="button"
                     onClick={() => setFormData({
                       ...formData, 
-                      schedule: { kind: preset.kind, everyMs: preset.everyMs, expr: preset.expr }
+                      schedule: { 
+                        kind: preset.kind, 
+                        everyMs: preset.everyMs, 
+                        expr: preset.expr 
+                      }
                     })}
-                    className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
-                      selected 
+                    className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
+                      isSelected 
                         ? 'border-[var(--rar-accent)] bg-[var(--rar-accent-dim)]' 
                         : 'border-[var(--rar-border)] bg-[var(--rar-surface)]'
                     }`}
                   >
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      selected ? 'border-[var(--rar-accent)]' : 'border-[var(--rar-border)]'
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      isSelected ? 'border-[var(--rar-accent)]' : 'border-[var(--rar-border)]'
                     }`}>
-                      {selected && <div className="w-2.5 h-2.5 rounded-full bg-[var(--rar-accent)]" />}
+                      {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-[var(--rar-accent)]" />}
                     </div>
-                    <span className="flex-1 text-left font-medium">{preset.label}</span>
+                    <span className="font-medium">{preset.label}</span>
                   </button>
                 )
               })}
@@ -205,30 +223,31 @@ function Cron() {
             <label className="block text-sm font-medium">What should it do?</label>
             <div className="grid grid-cols-1 gap-2">
               {PAYLOAD_TYPES.map(type => {
-                const selected = formData.payload.kind === type.id
+                const isSelected = formData.payload.kind === type.id
                 return (
                   <button
                     key={type.id}
+                    type="button"
                     onClick={() => setFormData({...formData, payload: { ...formData.payload, kind: type.id }})}
-                    className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
-                      selected 
+                    className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
+                      isSelected 
                         ? 'border-[var(--rar-accent)] bg-[var(--rar-accent-dim)]' 
                         : 'border-[var(--rar-border)] bg-[var(--rar-surface)]'
                     }`}
                   >
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      selected ? 'bg-[var(--rar-accent)]' : 'bg-[var(--rar-surface-hover)]'
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                      isSelected ? 'bg-[var(--rar-accent)]' : 'bg-[var(--rar-surface-hover)]'
                     }`}>
-                      <type.icon size={20} className={selected ? 'text-white' : 'text-[var(--rar-text-muted)]'} />
+                      <type.icon size={20} className={isSelected ? 'text-white' : 'text-[var(--rar-text-muted)]'} />
                     </div>
-                    <div className="flex-1 text-left">
+                    <div className="flex-1">
                       <div className="font-medium">{type.label}</div>
                       <div className="text-xs text-[var(--rar-text-muted)]">{type.desc}</div>
                     </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      selected ? 'border-[var(--rar-accent)]' : 'border-[var(--rar-border)]'
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      isSelected ? 'border-[var(--rar-accent)]' : 'border-[var(--rar-border)]'
                     }`}>
-                      {selected && <div className="w-2.5 h-2.5 rounded-full bg-[var(--rar-accent)]" />}
+                      {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-[var(--rar-accent)]" />}
                     </div>
                   </button>
                 )
@@ -258,8 +277,8 @@ function Cron() {
                 setFormData({...formData, payload: newPayload})
               }}
               placeholder={placeholders[formData.payload.kind]}
-              className="input min-h-[100px] resize-none"
-              rows={3}
+              className="input min-h-[120px] resize-none"
+              rows={4}
             />
           </div>
         )
@@ -270,33 +289,34 @@ function Cron() {
             <label className="block text-sm font-medium">Where should results go?</label>
             <div className="grid grid-cols-1 gap-2">
               {[
-                { id: 'none', label: 'Silent', desc: 'No notification', icon: Check },
+                { id: 'none', label: 'Silent', desc: 'No notification', icon: CheckCircle },
                 { id: 'announce', label: 'Announce', desc: 'Send to main channel', icon: Bell }
               ].map(mode => {
-                const selected = formData.delivery.mode === mode.id
+                const isSelected = formData.delivery.mode === mode.id
                 return (
                   <button
                     key={mode.id}
+                    type="button"
                     onClick={() => setFormData({...formData, delivery: { mode: mode.id }})}
-                    className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
-                      selected 
+                    className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
+                      isSelected 
                         ? 'border-[var(--rar-accent)] bg-[var(--rar-accent-dim)]' 
                         : 'border-[var(--rar-border)] bg-[var(--rar-surface)]'
                     }`}
                   >
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      selected ? 'bg-[var(--rar-accent)]' : 'bg-[var(--rar-surface-hover)]'
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                      isSelected ? 'bg-[var(--rar-accent)]' : 'bg-[var(--rar-surface-hover)]'
                     }`}>
-                      <mode.icon size={20} className={selected ? 'text-white' : 'text-[var(--rar-text-muted)]'} />
+                      <mode.icon size={20} className={isSelected ? 'text-white' : 'text-[var(--rar-text-muted)]'} />
                     </div>
-                    <div className="flex-1 text-left">
+                    <div className="flex-1">
                       <div className="font-medium">{mode.label}</div>
                       <div className="text-xs text-[var(--rar-text-muted)]">{mode.desc}</div>
                     </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      selected ? 'border-[var(--rar-accent)]' : 'border-[var(--rar-border)]'
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      isSelected ? 'border-[var(--rar-accent)]' : 'border-[var(--rar-border)]'
                     }`}>
-                      {selected && <div className="w-2.5 h-2.5 rounded-full bg-[var(--rar-accent)]" />}
+                      {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-[var(--rar-accent)]" />}
                     </div>
                   </button>
                 )
