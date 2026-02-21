@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-rar-900 text-gray-100 antialiased;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-rar-800 rounded-lg border border-rar-700 p-4;
+  }
+  
+  .btn-primary {
+    @apply bg-rar-accent text-white px-4 py-2 rounded hover:bg-orange-600 transition;
+  }
+  
+  .btn-secondary {
+    @apply bg-rar-700 text-gray-200 px-4 py-2 rounded hover:bg-rar-600 transition;
+  }
+}
