@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Globe, Camera, RefreshCw, MousePointer } from 'lucide-react'
+import { Globe, Monitor, Camera, MousePointer, ExternalLink } from 'lucide-react'
 
 function Browser() {
   const [status, setStatus] = useState(null)
@@ -7,106 +7,113 @@ function Browser() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchStatus()
+    Promise.all([
+      fetch('/api/browser/status').then(r => r.json()),
+      fetch('/api/browser/tabs').then(r => r.json())
+    ]).then(([statusData, tabsData]) => {
+      setStatus(statusData)
+      setTabs(tabsData.tabs || [])
+      setLoading(false)
+    }).catch(() => {
+      setLoading(false)
+    })
   }, [])
 
-  const fetchStatus = () => {
-    setLoading(true)
-    fetch('/api/browser/status')
-      .then(r => r.json())
-      .then(data => {
-        setStatus(data)
-        if (data.running) {
-          fetchTabs()
-        }
-        setLoading(false)
-      })
-      .catch(err => {
-        console.error('Browser not available:', err)
-        setStatus({ running: false, error: err.message })
-        setLoading(false)
-      })
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl skeleton" />
+          <div className="space-y-2">
+            <div className="w-32 h-5 skeleton" />
+            <div className="w-20 h-4 skeleton" />
+          </div>
+        </div>
+      </div>
+    )
   }
-
-  const fetchTabs = () => {
-    fetch('/api/browser/tabs')
-      .then(r => r.json())
-      .then(data => setTabs(data || []))
-      .catch(console.error)
-  }
-
-  const takeScreenshot = () => {
-    fetch('/api/browser/screenshot', { method: 'POST' })
-      .then(r => r.json())
-      .then(data => {
-        if (data.path) {
-          window.open(`/api/browser/screenshot/view?path=${data.path}`, '_blank')
-        }
-      })
-  }
-
-  if (loading) return <div className="flex items-center justify-center h-full">Loading...</div>
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
-        <Globe className="text-rar-accent" />
-        Browser Remote
-      </h1>
-
-      {!status?.running ? (
-        <div className="card text-center py-12">
-          <Globe size={48} className="mx-auto mb-4 text-gray-600" />
-          <p className="text-gray-400">Browser is not running</p>
-          <p className="text-sm text-gray-500 mt-2">Start OpenClaw browser to enable remote control</p>
-          <button onClick={fetchStatus} className="btn-secondary mt-4 flex items-center gap-2 mx-auto">
-            <RefreshCw size={14} />
-            Retry
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-[var(--rar-accent)]/10 flex items-center justify-center">
+            <Globe className="text-[var(--rar-accent)]" size={24} />
+          </div>
+          <div>
+            <h1 className="page-title">Browser</h1>
+            <p className="page-subtitle">{status?.status || 'Unknown'}</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <button className="btn-secondary">
+            <Camera size={16} />
+            <span className="hidden sm:inline">Screenshot</span>
           </button>
         </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="card flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
-              <span>Browser running on {status.cdpUrl}</span>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={takeScreenshot} className="btn-secondary flex items-center gap-2">
-                <Camera size={14} />
-                Screenshot
-              </button>
-              <button onClick={fetchTabs} className="btn-secondary flex items-center gap-2">
-                <RefreshCw size={14} />
-                Refresh
-              </button>
-            </div>
-          </div>
+      </div>
 
-          <div className="card">
-            <h3 className="font-semibold mb-4">Open Tabs ({tabs.length})</h3>
-            
-            {tabs.length === 0 ? (
-              <p className="text-gray-400">No tabs open</p>
-            ) : (
-              <div className="space-y-2">
-                {tabs.map((tab, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-3 bg-rar-700/50 rounded">
-                    <div className="flex items-center gap-3">
-                      <MousePointer size={14} className="text-gray-400" />
-                      <div>
-                        <div className="font-medium truncate max-w-md">{tab.title || 'Untitled'}</div>
-                        <div className="text-sm text-gray-400 truncate max-w-md">{tab.url}</div>
-                      </div>
-                    </div>
-                    <button className="btn-primary text-sm">Focus</button>
-                  </div>
-                ))}
+      <div className="divider" />
+
+      {/* Status Card */}
+      <div className="card p-4">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-xl bg-[var(--rar-surface-hover)] flex items-center justify-center">
+            <Monitor size={28} className="text-[var(--rar-text-muted)]" />
+          </div>
+          <div>
+            <div className="text-sm text-[var(--rar-text-muted)]">Status</div>
+            <div className="flex items-center gap-2 mt-1">
+              <div className={`w-2 h-2 rounded-full ${
+                status?.status === 'available' ? 'bg-green-500' : 'bg-yellow-500'
+              }`} />
+              <span className="font-medium">{status?.status === 'available' ? 'Ready' : 'Limited'}</span>
+            </div>
+            {status?.version && (
+              <div className="text-xs text-[var(--rar-text-muted)] mt-1">
+                {status.version}
               </div>
             )}
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Tabs */}
+      <div className="card">
+        <div className="p-3 border-b border-[var(--rar-border)] font-medium">
+          Tabs ({tabs.length})
+        </div>
+        
+        {tabs.length === 0 ? (
+          <div className="p-8 text-center">
+            <MousePointer size={32} className="mx-auto mb-3 text-[var(--rar-text-muted)]" />
+            <p className="text-sm text-[var(--rar-text-muted)]">No active tabs</p>
+            <p className="text-xs text-[var(--rar-text-muted)] mt-1">Browser control requires OpenClaw extension</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-[var(--rar-border)]">
+            {tabs.map((tab, idx) => (
+              <div key={idx} className="p-3 flex items-center gap-3">
+                <img src={tab.favicon} alt="" className="w-4 h-4" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm truncate">{tab.title}</div>
+                  <div className="text-xs text-[var(--rar-text-muted)] truncate">{tab.url}</div>
+                </div>
+                <a 
+                  href={tab.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="btn-ghost p-1"
+                >
+                  <ExternalLink size={14} />
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
